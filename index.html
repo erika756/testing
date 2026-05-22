@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stay in the Loop — Prosana</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background-color: #f5f5f3;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 4px 32px rgba(0, 0, 0, 0.08);
+      padding: 56px 48px;
+      max-width: 520px;
+      width: 100%;
+    }
+
+    .logo {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a1a;
+      letter-spacing: -0.5px;
+      margin-bottom: 32px;
+    }
+
+    .logo span {
+      color: #4f7cff;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      line-height: 1.25;
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: #6b7280;
+      line-height: 1.6;
+      margin-bottom: 36px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 16px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+      letter-spacing: 0.01em;
+    }
+
+    input {
+      padding: 11px 14px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #1a1a1a;
+      background: #fafafa;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      outline: none;
+    }
+
+    input::placeholder {
+      color: #b0b7c3;
+    }
+
+    input:focus {
+      border-color: #4f7cff;
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.12);
+    }
+
+    input:invalid:not(:placeholder-shown) {
+      border-color: #ef4444;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: #4f7cff;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+      letter-spacing: 0.01em;
+    }
+
+    .submit-btn:hover {
+      background: #3b65e8;
+      box-shadow: 0 4px 16px rgba(79, 124, 255, 0.3);
+    }
+
+    .submit-btn:active {
+      transform: scale(0.99);
+    }
+
+    .submit-btn:disabled {
+      background: #a5b4fc;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .privacy {
+      font-size: 12px;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 16px;
+      line-height: 1.5;
+    }
+
+    /* Success state */
+    .success-message {
+      display: none;
+      text-align: center;
+      padding: 24px 0;
+    }
+
+    .success-icon {
+      width: 56px;
+      height: 56px;
+      background: #ecfdf5;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 24px;
+    }
+
+    .success-message h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+    }
+
+    .success-message p {
+      font-size: 15px;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 480px) {
+      .card {
+        padding: 36px 24px;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="logo">Pro<span>sana</span></div>
+
+    <div id="form-section">
+      <h1>Stay in the loop</h1>
+      <p class="subtitle">Join our newsletter and be the first to hear about updates, insights, and what we're building next.</p>
+
+      <!-- IMPORTANT: Replace YOUR_FORMSPREE_ID below with your actual Formspree form ID -->
+      <form id="signup-form" action="https://formspree.io/f/YOUR_FORMSPREE_ID" method="POST">
+
+        <div class="form-row">
+          <div class="field">
+            <label for="first_name">First Name</label>
+            <input
+              type="text"
+              id="first_name"
+              name="first_name"
+              placeholder="Jane"
+              required
+              autocomplete="given-name"
+            />
+          </div>
+
+          <div class="field">
+            <label for="last_name">Last Name</label>
+            <input
+              type="text"
+              id="last_name"
+              name="last_name"
+              placeholder="Smith"
+              required
+              autocomplete="family-name"
+            />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="email">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            placeholder="jane@company.com"
+            required
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="field">
+          <label for="company_name">Company Name</label>
+          <input
+            type="text"
+            id="company_name"
+            name="company_name"
+            placeholder="Acme Inc."
+            required
+            autocomplete="organization"
+          />
+        </div>
+
+        <div class="field">
+          <label for="company_website">Company Website</label>
+          <input
+            type="url"
+            id="company_website"
+            name="company_website"
+            placeholder="https://yourcompany.com"
+            required
+            autocomplete="url"
+          />
+        </div>
+
+        <button type="submit" class="submit-btn" id="submit-btn">
+          Sign me up
+        </button>
+
+        <p class="privacy">No spam, ever. Unsubscribe at any time.</p>
+      </form>
+    </div>
+
+    <!-- Shown after successful submission -->
+    <div class="success-message" id="success-section">
+      <div class="success-icon">&#10003;</div>
+      <h2>You're in!</h2>
+      <p>Thanks for signing up. We'll be in touch with updates from Prosana soon.</p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('signup-form');
+    const btn = document.getElementById('submit-btn');
+    const formSection = document.getElementById('form-section');
+    const successSection = document.getElementById('success-section');
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          body: new FormData(form),
+          headers: { 'Accept': 'application/json' }
+        });
+
+        if (response.ok) {
+          formSection.style.display = 'none';
+          successSection.style.display = 'block';
+        } else {
+          btn.disabled = false;
+          btn.textContent = 'Sign me up';
+          alert('Something went wrong. Please try again.');
+        }
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Sign me up';
+        alert('Something went wrong. Please check your connection and try again.');
+      }
+    });
+  </script>
+
+</body>
+</html>
