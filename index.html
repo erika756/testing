@@ -31,15 +31,12 @@
     }
 
     .logo {
-      font-size: 22px;
-      font-weight: 700;
-      color: #1a1a1a;
-      letter-spacing: -0.5px;
       margin-bottom: 32px;
     }
 
-    .logo span {
-      color: #4f7cff;
+    .logo img {
+      height: 48px;
+      width: auto;
     }
 
     h1 {
@@ -98,9 +95,9 @@
     }
 
     input:focus {
-      border-color: #4f7cff;
+      border-color: #2596be;
       background: #ffffff;
-      box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.12);
+      box-shadow: 0 0 0 3px rgba(37, 150, 190, 0.12);
     }
 
     input:invalid:not(:placeholder-shown) {
@@ -110,7 +107,7 @@
     .submit-btn {
       width: 100%;
       padding: 14px;
-      background: #4f7cff;
+      background: #2596be;
       color: #ffffff;
       border: none;
       border-radius: 8px;
@@ -123,8 +120,8 @@
     }
 
     .submit-btn:hover {
-      background: #3b65e8;
-      box-shadow: 0 4px 16px rgba(79, 124, 255, 0.3);
+      background: #1a7a9e;
+      box-shadow: 0 4px 16px rgba(37, 150, 190, 0.3);
     }
 
     .submit-btn:active {
@@ -132,7 +129,7 @@
     }
 
     .submit-btn:disabled {
-      background: #a5b4fc;
+      background: #7dc4d9;
       cursor: not-allowed;
       transform: none;
       box-shadow: none;
@@ -196,11 +193,11 @@
 <body>
 
   <div class="card">
-    <div class="logo">Pro<span>sana</span></div>
+    <div class="logo"><img src="logo.png" alt="Prosana" /></div>
 
     <div id="form-section">
       <h1>Stay in the loop</h1>
-      <p class="subtitle">Join our newsletter and be the first to hear about updates, insights, and what we're building next.</p>
+      <p class="subtitle">You know someone who might benefit from this newsletter? Sign them up!</p>
 
       <!-- IMPORTANT: Replace YOUR_FORMSPREE_ID below with your actual Formspree form ID -->
       <form id="signup-form" action="https://formspree.io/f/mvzyrpbv" method="POST">
@@ -256,13 +253,12 @@
         </div>
 
         <div class="field">
-          <label for="company_website">Company Website</label>
+          <label for="company_website">Company Website <span style="font-weight:400;color:#9ca3af;">(optional)</span></label>
           <input
             type="url"
             id="company_website"
             name="company_website"
             placeholder="https://yourcompany.com"
-            required
             autocomplete="url"
           />
         </div>
