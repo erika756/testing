@@ -126,11 +126,16 @@ def status_icon(status):
 
 # ── HTML generation ───────────────────────────────────────────────────────────
 
+def is_rejected(status):
+    s = status.lower()
+    return "not selected" in s or "lost" in s or "failed" in s
+
 def generate_html(rows, today):
     # aggregate
     weekly    = defaultdict(lambda: {"cands": set(), "cos": set(), "pos": 0, "total": 0})
     co_data   = defaultdict(lambda: {"cands": set(), "selected": False, "etype": ""})
     cand_data = defaultdict(lambda: {"role": "", "items": [], "weeks": set()})
+    neglected = defaultdict(lambda: {"rejected": 0, "ever_pos": False, "etype": "", "cands": set(), "weeks": set()})
 
     week_order = []
     for r in rows:
@@ -149,8 +154,20 @@ def generate_html(rows, today):
         cand_data[r["candidate"]]["role"] = r["role"]
         cand_data[r["candidate"]]["items"].append(r)
         cand_data[r["candidate"]]["weeks"].add(w)
+        if r["status"]:
+            neglected[r["company"]]["etype"] = r["etype"]
+            neglected[r["company"]]["cands"].add(r["candidate"])
+            neglected[r["company"]]["weeks"].add(w)
+            if is_positive(r["status"]):
+                neglected[r["company"]]["ever_pos"] = True
+            if is_rejected(r["status"]):
+                neglected[r["company"]]["rejected"] += 1
 
     ranked_cos = sorted(co_data.items(), key=lambda x: -len(x[1]["cands"]))
+    ranked_neglected = sorted(
+        [(co, d) for co, d in neglected.items() if d["rejected"] > 0 and not d["ever_pos"]],
+        key=lambda x: -x[1]["rejected"]
+    )
 
     # chart data
     w_labels  = json.dumps(week_order)
@@ -165,6 +182,15 @@ def generate_html(rows, today):
     overall_rate = round(all_pos / len(rows) * 100) if rows else 0
     top_co      = ranked_cos[0][0].title() if ranked_cos else "—"
     top_co_n    = len(ranked_cos[0][1]["cands"]) if ranked_cos else 0
+
+    # neglected companies table
+    neglected_rows_html = ""
+    for i, (co, d) in enumerate(ranked_neglected, 1):
+        cands_str = ", ".join(sorted(d["cands"]))
+        weeks_str = " · ".join(sorted(d["weeks"]))
+        neglected_rows_html += f'<tr><td class="rank">{i}</td><td>{co.title()}</td><td><span class="badge">{d["etype"]}</span></td><td class="center notsel">{d["rejected"]}</td><td class="cands-list">{cands_str}</td><td class="cands-list">{weeks_str}</td></tr>\n'
+    if not neglected_rows_html:
+        neglected_rows_html = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No companies rejected across all candidates yet</td></tr>'
 
     # candidate cards HTML
     cand_cards = ""
@@ -361,6 +387,12 @@ def generate_html(rows, today):
     <tbody>{co_rows_html}</tbody>
   </table>
 </div>
+
+<h2>🚫 Most Neglected Companies (never selected)</h2>
+<div class="card"><table>
+  <thead><tr><th>#</th><th>Company</th><th>Type</th><th class="center">Times Rejected</th><th>Shown to</th><th>Week(s)</th></tr></thead>
+  <tbody>{neglected_rows_html}</tbody>
+</table></div>
 
 <h2>🎯 Roles by Companies Generated</h2>
 <div class="card">
