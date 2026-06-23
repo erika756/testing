@@ -2,378 +2,421 @@
 """
 Weekly Newsletter Leads Tracker
 Fetches the 3 most recent Asana newsletter/leads projects, cross-references
-companies against company_master.json (excluding Clients), then rewrites
-the Notion page with fresh stats.
+companies against company_master.json (excluding Clients), then writes
+leads-tracker.html to the repo root.
 
 Required env vars:
-  ASANA_TOKEN       - Asana personal access token
-  NOTION_TOKEN      - Notion integration secret
-  NOTION_PAGE_ID    - ID of the Notion page to update (no dashes)
+  ASANA_TOKEN  - Asana personal access token
 """
 
-import os
-import re
-import json
-import datetime
-import requests
+import os, re, json, datetime, requests
 from collections import defaultdict
+from pathlib import Path
 
-ASANA_TOKEN = os.environ["ASANA_TOKEN"]
-NOTION_TOKEN = os.environ["NOTION_TOKEN"]
-NOTION_PAGE_ID = os.environ.get("NOTION_PAGE_ID", "3887b561cbb68198a8e4f02a52f531af")
+ASANA_TOKEN  = os.environ["ASANA_TOKEN"]
+ASANA_BASE   = "https://app.asana.com/api/1.0"
+ASANA_HEADS  = {"Authorization": f"Bearer {ASANA_TOKEN}", "Accept": "application/json"}
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-COMPANY_MASTER_PATH = os.path.join(SCRIPT_DIR, "company_master.json")
+REPO_ROOT    = Path(__file__).parent.parent
+MASTER_PATH  = Path(__file__).parent / "company_master.json"
+OUTPUT_HTML  = REPO_ROOT / "leads-tracker.html"
 
-ASANA_BASE = "https://app.asana.com/api/1.0"
-NOTION_BASE = "https://api.notion.com/v1"
+SKIP_RE      = re.compile(r"share with|ag\.assistant|@gmail|interest form|client name|^\s*$", re.I)
+SECTION_RE   = re.compile(r"CANDIDATE\s*\d+\s*[-–]\s*([^-–]+?)\s*[-–]\s*([^-–]+?)\s*[-–]", re.I)
 
-ASANA_HEADERS = {"Authorization": f"Bearer {ASANA_TOKEN}", "Accept": "application/json"}
-NOTION_HEADERS = {
-    "Authorization": f"Bearer {NOTION_TOKEN}",
-    "Notion-Version": "2022-06-28",
-    "Content-Type": "application/json",
-}
+# ── Asana ─────────────────────────────────────────────────────────────────────
 
-# Names that should be excluded (placeholder/instruction tasks)
-SKIP_TASK_PATTERNS = re.compile(
-    r"share with|ag\.assistant|@gmail\.com|interest form|client name|^\s*$",
-    re.IGNORECASE,
-)
-
-CANDIDATE_SECTION_RE = re.compile(r"CANDIDATE\s+\d+\s*[-–]\s*([^-–]+)[-–]\s*([^-–]+)[-–]", re.IGNORECASE)
-
-
-def load_company_master():
-    with open(COMPANY_MASTER_PATH) as f:
-        return json.load(f)
-
-
-# ── Asana helpers ─────────────────────────────────────────────────────────────
-
-def asana_get(path, params=None):
-    r = requests.get(f"{ASANA_BASE}{path}", headers=ASANA_HEADERS, params=params or {})
+def asana(path, params=None):
+    r = requests.get(f"{ASANA_BASE}{path}", headers=ASANA_HEADS, params=params or {})
     r.raise_for_status()
     return r.json()["data"]
 
+def latest_newsletter_projects(n=3):
+    ws  = asana("/workspaces")[0]["gid"]
+    all_projects = asana("/projects", {"workspace": ws, "limit": 100, "opt_fields": "name,created_at"})
+    pat = re.compile(r"newsletter|news\s*\[leads\]", re.I)
+    hits = [p for p in all_projects if pat.search(p["name"])]
+    hits.sort(key=lambda p: p.get("created_at", ""), reverse=True)
+    return hits[:n]
 
-def find_newsletter_projects(limit=3):
-    """Search for the most recent newsletter/leads projects and return up to `limit`."""
-    workspaces = asana_get("/workspaces")
-    workspace_gid = workspaces[0]["gid"]
+def project_tasks(gid):
+    return asana("/tasks", {"project": gid, "limit": 100,
+                             "opt_fields": "name,memberships.section.name,custom_fields"})
 
-    results = asana_get(
-        "/projects",
-        params={"workspace": workspace_gid, "limit": 100, "opt_fields": "name,created_at"},
-    )
-
-    newsletter_re = re.compile(
-        r"(newsletter|news\s*\[leads\])", re.IGNORECASE
-    )
-    matches = [p for p in results if newsletter_re.search(p["name"])]
-    matches.sort(key=lambda p: p.get("created_at", ""), reverse=True)
-    return matches[:limit]
-
-
-def get_project_tasks(project_gid):
-    tasks = asana_get(
-        "/tasks",
-        params={
-            "project": project_gid,
-            "limit": 100,
-            "opt_fields": "name,memberships.section.name,custom_fields,completed",
-        },
-    )
-    return tasks
-
+def cf(task, field):
+    for f in task.get("custom_fields") or []:
+        if f.get("name") == field:
+            ev = f.get("enum_value")
+            return ev["name"] if ev else (f.get("display_value") or "")
+    return ""
 
 # ── Parsing ───────────────────────────────────────────────────────────────────
 
-def parse_candidate_section(section_name):
-    """Return (candidate_name, role) from section name, or None if not a candidate section."""
-    m = CANDIDATE_SECTION_RE.match(section_name)
+def norm(name):
+    return re.sub(r"[​‌‍]", "", name).strip().upper()
+
+def week_label(proj):
+    m = re.search(r"(\d{1,2})\s+(\w+)\s+(\d{4})", proj["name"])
+    if m:
+        return f"{m.group(1)} {m.group(2)[:3]} {m.group(3)}"
+    d = proj.get("created_at", "")
+    if d:
+        return datetime.datetime.fromisoformat(d.replace("Z","+00:00")).strftime("%-d %b %Y")
+    return proj["name"]
+
+def parse_section(sec):
+    m = SECTION_RE.match(sec)
     if not m:
         return None
-    candidate = m.group(1).strip().title()
-    role = m.group(2).strip().title()
-    return candidate, role
+    return m.group(1).strip().title(), m.group(2).strip().title()
 
+# ── Build data ────────────────────────────────────────────────────────────────
 
-def cf_value(task, field_name):
-    for cf in task.get("custom_fields") or []:
-        if cf.get("name") == field_name:
-            ev = cf.get("enum_value")
-            if ev:
-                return ev.get("name", "")
-            return cf.get("display_value") or cf.get("text_value") or ""
-    return ""
-
-
-def normalize_company(name):
-    return name.strip().upper().replace("​", "").replace("‌", "").replace("‍", "").strip()
-
-
-def label_week(project_name, created_at):
-    """Derive a short week label from project name or creation date."""
-    date_re = re.search(r"(\d{1,2})\s+(\w+)\s+(\d{4})", project_name)
-    if date_re:
-        return f"{date_re.group(1)} {date_re.group(2)[:3]} {date_re.group(3)}"
-    if created_at:
-        d = datetime.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-        return d.strftime("%-d %b %Y")
-    return project_name
-
-
-# ── Core analysis ─────────────────────────────────────────────────────────────
-
-def build_report(projects, company_master):
-    """Returns structured report data across the given projects."""
-    rows = []  # {week, candidate, role, company, excel_type, status}
-
+def build_rows(projects, master):
+    rows = []
     for proj in projects:
-        week = label_week(proj["name"], proj.get("created_at", ""))
-        tasks = get_project_tasks(proj["gid"])
-
-        for task in tasks:
-            if not task.get("memberships"):
-                continue
-            section_name = task["memberships"][0].get("section", {}).get("name", "")
-            parsed = parse_candidate_section(section_name)
+        wk = week_label(proj)
+        for task in project_tasks(proj["gid"]):
+            sec = (task.get("memberships") or [{}])[0].get("section", {}).get("name", "")
+            parsed = parse_section(sec)
             if not parsed:
                 continue
             candidate, role = parsed
-
             company_raw = task.get("name", "").strip()
-            if SKIP_TASK_PATTERNS.search(company_raw):
+            if SKIP_RE.search(company_raw):
                 continue
-
-            company_norm = normalize_company(company_raw)
-            excel_type = company_master.get(company_norm)
-            if excel_type is None:
-                continue  # not in master sheet
-            if excel_type == "Client":
-                continue  # exclude clients
-
-            status = cf_value(task, "Status") or cf_value(task, "status") or ""
-            rows.append({
-                "week": week,
-                "candidate": candidate,
-                "role": role,
-                "company": company_norm,
-                "excel_type": excel_type,
-                "status": status,
-            })
-
+            company_key = norm(company_raw)
+            etype = master.get(company_key)
+            if not etype or etype == "Client":
+                continue
+            status = cf(task, "Status") or cf(task, "status")
+            rows.append(dict(week=wk, candidate=candidate, role=role,
+                             company=company_key, etype=etype, status=status))
     return rows
 
-
-def compute_stats(rows):
-    weekly = defaultdict(lambda: {"candidates": set(), "companies": set(), "selected": 0, "total": 0})
-    company_interest = defaultdict(lambda: {"candidates": set(), "selected": False, "type": ""})
-    candidate_data = defaultdict(lambda: {"role": "", "companies": []})
-
-    for r in rows:
-        w = r["week"]
-        weekly[w]["candidates"].add(r["candidate"])
-        weekly[w]["companies"].add(r["company"])
-        weekly[w]["total"] += 1
-        is_selected = "selected" in r["status"].lower() and "not" not in r["status"].lower()
-        is_positive = is_selected or "interested" in r["status"].lower() or "interviewing" in r["status"].lower()
-        if is_positive:
-            weekly[w]["selected"] += 1
-
-        company_interest[r["company"]]["candidates"].add(r["candidate"])
-        company_interest[r["company"]]["type"] = r["excel_type"]
-        if is_positive:
-            company_interest[r["company"]]["selected"] = True
-
-        candidate_data[r["candidate"]]["role"] = r["role"]
-        candidate_data[r["candidate"]]["companies"].append(r)
-
-    return weekly, company_interest, candidate_data
-
-
-# ── Notion content builder ────────────────────────────────────────────────────
-
-def status_emoji(status):
-    if not status or status == "Not set":
-        return "—"
+def is_positive(status):
     s = status.lower()
-    if "not selected" in s:
-        return "❌ Not Selected"
-    if "selected" in s:
-        return "✅ Selected"
-    if "interviewing" in s:
-        return "🔄 Interviewing"
-    if "placed" in s:
-        return "🏆 Placed"
-    if "lost" in s or "failed" in s:
-        return "❌ Lost"
-    if "interested" in s:
-        return "✅ Candidate interested"
+    return ("selected" in s and "not" not in s) or "interested" in s or "interviewing" in s or "placed" in s
+
+def status_icon(status):
+    if not status: return "—"
+    s = status.lower()
+    if "not selected" in s: return "✗ Not Selected"
+    if "selected" in s:     return "✓ Selected"
+    if "placed" in s:       return "★ Placed"
+    if "interviewing" in s: return "↻ Interviewing"
+    if "lost" in s or "failed" in s: return "✗ Lost"
+    if "interested" in s:   return "✓ Interested"
     return status
 
+# ── HTML generation ───────────────────────────────────────────────────────────
 
-def build_notion_blocks(rows, weekly, company_interest, candidate_data, today):
-    blocks = []
+def generate_html(rows, today):
+    # aggregate
+    weekly    = defaultdict(lambda: {"cands": set(), "cos": set(), "pos": 0, "total": 0})
+    co_data   = defaultdict(lambda: {"cands": set(), "selected": False, "etype": ""})
+    cand_data = defaultdict(lambda: {"role": "", "items": [], "weeks": set()})
 
-    def paragraph(text):
-        return {"object": "block", "type": "paragraph",
-                "paragraph": {"rich_text": [{"type": "text", "text": {"content": text}}]}}
-
-    def heading(text, level=2):
-        t = f"heading_{level}"
-        return {"object": "block", "type": t, t: {"rich_text": [{"type": "text", "text": {"content": text}}]}}
-
-    def divider():
-        return {"object": "block", "type": "divider", "divider": {}}
-
-    def table_block(rows_data, header=True):
-        width = len(rows_data[0])
-        cells = []
-        for i, row in enumerate(rows_data):
-            cell_row = []
-            for cell in row:
-                cell_row.append([{"type": "text", "text": {"content": str(cell)},
-                                   "annotations": {"bold": (i == 0 and header)}}])
-            cells.append({"cells": cell_row})
-        return {
-            "object": "block", "type": "table",
-            "table": {"table_width": width, "has_column_header": header, "has_row_header": False, "children": cells}
-        }
-
-    def callout(text, emoji="ℹ️"):
-        return {"object": "block", "type": "callout",
-                "callout": {"rich_text": [{"type": "text", "text": {"content": text}}],
-                             "icon": {"type": "emoji", "emoji": emoji}}}
-
-    blocks.append(paragraph(f"Last updated: {today}  ·  Auto-updated every Monday via GitHub Action"))
-    blocks.append(callout(
-        "Only companies in the Client & Lead Master sheet with type Lead Type A or B are included. Clients are excluded.",
-        "📋"
-    ))
-    blocks.append(divider())
-
-    # Weekly trend
-    blocks.append(heading("📈 Weekly Trend"))
-    week_rows = [["Week", "Candidates", "Unique Companies", "Positive Responses", "Rate"]]
-    for wk in sorted(weekly.keys()):
-        s = weekly[wk]
-        total = s["total"]
-        rate = f"{round(s['selected']/total*100)}%" if total else "—"
-        week_rows.append([wk, len(s["candidates"]), len(s["companies"]), s["selected"], rate])
-    blocks.append(table_block(week_rows))
-    blocks.append(divider())
-
-    # Company interest ranking
-    blocks.append(heading("🏆 Companies by Total Candidate Interest"))
-    ranked = sorted(company_interest.items(), key=lambda x: -len(x[1]["candidates"]))
-    comp_rows = [["#", "Company", "Type", "# Candidates", "Candidates", "Ever Selected?"]]
-    for i, (comp, data) in enumerate(ranked, 1):
-        cands = ", ".join(sorted(data["candidates"]))
-        selected = "✅ Yes" if data["selected"] else "❌ No"
-        comp_rows.append([i, comp.title(), data["type"], len(data["candidates"]), cands, selected])
-    blocks.append(table_block(comp_rows))
-    blocks.append(divider())
-
-    # Roles
-    blocks.append(heading("🎯 Roles by Companies Generated"))
-    role_companies = defaultdict(set)
-    role_candidate = {}
+    week_order = []
     for r in rows:
-        role_companies[r["role"]].add(r["company"])
-        role_candidate[r["role"]] = r["candidate"]
-    role_rows = [["Role", "Candidate", "# Companies Shown"]]
-    for role, comps in sorted(role_companies.items(), key=lambda x: -len(x[1])):
-        role_rows.append([role, role_candidate[role], len(comps)])
-    blocks.append(table_block(role_rows))
-    blocks.append(divider())
+        w = r["week"]
+        if w not in week_order:
+            week_order.append(w)
+        weekly[w]["cands"].add(r["candidate"])
+        weekly[w]["cos"].add(r["company"])
+        weekly[w]["total"] += 1
+        if is_positive(r["status"]):
+            weekly[w]["pos"] += 1
+        co_data[r["company"]]["cands"].add(r["candidate"])
+        co_data[r["company"]]["etype"] = r["etype"]
+        if is_positive(r["status"]):
+            co_data[r["company"]]["selected"] = True
+        cand_data[r["candidate"]]["role"] = r["role"]
+        cand_data[r["candidate"]]["items"].append(r)
+        cand_data[r["candidate"]]["weeks"].add(w)
 
-    # Per-candidate detail
-    blocks.append(heading("👤 Candidate Detail"))
-    for cand, data in sorted(candidate_data.items()):
-        # Find the week for this candidate
-        weeks = list({r["week"] for r in data["companies"]})
-        week_str = " / ".join(sorted(weeks))
-        blocks.append(heading(f"{cand} — {data['role']}  ({week_str})", level=3))
-        cand_rows = [["Company", "Type", "Status"]]
-        for r in data["companies"]:
-            cand_rows.append([r["company"].title(), r["excel_type"], status_emoji(r["status"])])
-        blocks.append(table_block(cand_rows))
+    ranked_cos = sorted(co_data.items(), key=lambda x: -len(x[1]["cands"]))
 
-    return blocks
+    # chart data
+    w_labels  = json.dumps(week_order)
+    w_counts  = json.dumps([len(weekly[w]["cos"]) for w in week_order])
+    w_sel     = json.dumps([weekly[w]["pos"] for w in week_order])
+    w_rates   = json.dumps([round(weekly[w]["pos"]/weekly[w]["total"]*100) if weekly[w]["total"] else 0 for w in week_order])
 
+    # KPIs
+    total_cos   = len(co_data)
+    total_cands = len(cand_data)
+    all_pos     = sum(1 for r in rows if is_positive(r["status"]))
+    overall_rate = round(all_pos / len(rows) * 100) if rows else 0
+    top_co      = ranked_cos[0][0].title() if ranked_cos else "—"
+    top_co_n    = len(ranked_cos[0][1]["cands"]) if ranked_cos else 0
 
-# ── Notion API ────────────────────────────────────────────────────────────────
+    # candidate cards HTML
+    cand_cards = ""
+    for cand, data in sorted(cand_data.items()):
+        weeks_str = " · ".join(sorted(data["weeks"]))
+        rows_html = ""
+        for r in data["items"]:
+            icon = status_icon(r["status"])
+            cls = "sel" if is_positive(r["status"]) else ("notsel" if "not" in r["status"].lower() else "neutral")
+            rows_html += f"""<tr>
+              <td>{r['company'].title()}</td>
+              <td><span class="badge">{r['etype']}</span></td>
+              <td class="{cls}">{icon}</td>
+            </tr>"""
+        cand_cards += f"""
+        <div class="card cand-card">
+          <div class="cand-header">
+            <div>
+              <div class="cand-name">{cand}</div>
+              <div class="cand-role">{data['role']}</div>
+            </div>
+            <div class="cand-week">{weeks_str}</div>
+          </div>
+          <table class="inner-table">
+            <thead><tr><th>Company</th><th>Type</th><th>Status</th></tr></thead>
+            <tbody>{rows_html}</tbody>
+          </table>
+        </div>"""
 
-def clear_notion_page(page_id):
-    """Delete all existing blocks from the page."""
-    url = f"{NOTION_BASE}/blocks/{page_id}/children"
-    while True:
-        r = requests.get(url, headers=NOTION_HEADERS)
-        r.raise_for_status()
-        data = r.json()
-        for block in data.get("results", []):
-            requests.delete(f"{NOTION_BASE}/blocks/{block['id']}", headers=NOTION_HEADERS)
-        if not data.get("has_more"):
-            break
+    # company ranking rows
+    co_rows_html = ""
+    for i, (co, data) in enumerate(ranked_cos, 1):
+        cands_str = ", ".join(sorted(data["cands"]))
+        sel_cls   = "sel" if data["selected"] else "notsel"
+        sel_txt   = "✓ Yes" if data["selected"] else "✗ No"
+        co_rows_html += f"""<tr>
+          <td class="rank">{i}</td>
+          <td>{co.title()}</td>
+          <td><span class="badge">{data['etype']}</span></td>
+          <td class="center">{len(data['cands'])}</td>
+          <td class="cands-list">{cands_str}</td>
+          <td class="{sel_cls} center">{sel_txt}</td>
+        </tr>"""
 
+    # role stats
+    role_cos = defaultdict(set)
+    role_cand = {}
+    for r in rows:
+        role_cos[r["role"]].add(r["company"])
+        role_cand[r["role"]] = r["candidate"]
+    role_rows_html = ""
+    for role, cos in sorted(role_cos.items(), key=lambda x: -len(x[1])):
+        role_rows_html += f"""<tr>
+          <td>{role}</td>
+          <td>{role_cand[role]}</td>
+          <td class="center">{len(cos)}</td>
+        </tr>"""
 
-def append_notion_blocks(page_id, blocks):
-    """Append blocks to a Notion page in chunks of 100."""
-    url = f"{NOTION_BASE}/blocks/{page_id}/children"
-    for i in range(0, len(blocks), 100):
-        chunk = blocks[i:i + 100]
-        r = requests.patch(url, headers=NOTION_HEADERS, json={"children": chunk})
-        if not r.ok:
-            print(f"Notion error: {r.status_code} {r.text}")
-            r.raise_for_status()
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weekly Newsletter Leads — Candidate Interest Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {{
+    --bg:      #0d1117;
+    --surface: #161b22;
+    --border:  #21262d;
+    --text:    #e6edf3;
+    --muted:   #8b949e;
+    --accent:  #58a6ff;
+    --green:   #3fb950;
+    --red:     #f85149;
+    --yellow:  #d29922;
+    --purple:  #bc8cff;
+  }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    padding: 24px;
+  }}
+  h1 {{ font-size: 22px; font-weight: 600; margin-bottom: 4px; }}
+  .subtitle {{ color: var(--muted); font-size: 13px; margin-bottom: 28px; }}
+  h2 {{ font-size: 15px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+        letter-spacing: .6px; margin-bottom: 14px; margin-top: 32px; }}
 
+  /* KPI strip */
+  .kpi-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 32px; }}
+  .kpi {{
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px;
+  }}
+  .kpi-label {{ font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }}
+  .kpi-value {{ font-size: 32px; font-weight: 700; line-height: 1; }}
+  .kpi-value.accent {{ color: var(--accent); }}
+  .kpi-value.green  {{ color: var(--green); }}
+  .kpi-value.yellow {{ color: var(--yellow); }}
+  .kpi-sub {{ font-size: 12px; color: var(--muted); margin-top: 4px; }}
 
-def update_notion_page_title(page_id, today):
-    url = f"{NOTION_BASE}/pages/{page_id}"
-    payload = {
-        "properties": {
-            "title": {"title": [{"type": "text", "text": {"content": f"📊 Weekly Newsletter Leads — Candidate Interest Tracker"}}]}
-        }
-    }
-    requests.patch(url, headers=NOTION_HEADERS, json=payload)
+  /* Charts */
+  .charts-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 8px; }}
+  @media(max-width:760px) {{ .charts-grid {{ grid-template-columns: 1fr; }} }}
+  .chart-card {{
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px;
+  }}
+  .chart-title {{ font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--muted);
+                  text-transform: uppercase; letter-spacing: .5px; }}
+  .chart-wrap {{ position: relative; height: 200px; }}
 
+  /* Tables */
+  .card {{
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; margin-bottom: 12px; overflow-x: auto;
+  }}
+  table {{ width: 100%; border-collapse: collapse; }}
+  th {{ text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+        color: var(--muted); padding: 8px 12px; border-bottom: 1px solid var(--border); }}
+  td {{ padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }}
+  tr:last-child td {{ border-bottom: none; }}
+  tr:hover td {{ background: rgba(255,255,255,.02); }}
+  .rank {{ font-weight: 700; color: var(--muted); width: 30px; }}
+  .center {{ text-align: center; }}
+  .cands-list {{ color: var(--muted); font-size: 12px; }}
+  .sel     {{ color: var(--green); font-weight: 500; }}
+  .notsel  {{ color: var(--red); }}
+  .neutral {{ color: var(--yellow); }}
+  .badge {{
+    background: rgba(88,166,255,.12); color: var(--accent);
+    border: 1px solid rgba(88,166,255,.25);
+    border-radius: 4px; padding: 2px 7px; font-size: 11px; white-space: nowrap;
+  }}
+
+  /* Candidate cards */
+  .cands-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }}
+  .cand-card {{ padding: 18px 20px; }}
+  .cand-header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }}
+  .cand-name {{ font-size: 16px; font-weight: 600; }}
+  .cand-role {{ font-size: 12px; color: var(--accent); margin-top: 3px; }}
+  .cand-week {{ font-size: 11px; color: var(--muted); text-align: right; }}
+  .inner-table td, .inner-table th {{ padding: 7px 10px; }}
+
+  .updated {{ color: var(--muted); font-size: 12px; margin-top: 40px; text-align: right; }}
+</style>
+</head>
+<body>
+
+<h1>📊 Weekly Newsletter Leads</h1>
+<p class="subtitle">Candidate Interest Tracker — non-client companies only &nbsp;·&nbsp; auto-updated every Monday</p>
+
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-label">Unique Companies</div>
+    <div class="kpi-value accent">{total_cos}</div>
+    <div class="kpi-sub">across all weeks</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Candidates</div>
+    <div class="kpi-value accent">{total_cands}</div>
+    <div class="kpi-sub">active this period</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Overall Selection Rate</div>
+    <div class="kpi-value green">{overall_rate}%</div>
+    <div class="kpi-sub">{all_pos} of {len(rows)} entries selected</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Most Wanted Company</div>
+    <div class="kpi-value yellow" style="font-size:18px;margin-top:4px">{top_co}</div>
+    <div class="kpi-sub">{top_co_n} candidates interested</div>
+  </div>
+</div>
+
+<div class="charts-grid">
+  <div class="chart-card">
+    <div class="chart-title">Companies shown per week</div>
+    <div class="chart-wrap"><canvas id="coChart"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Selection rate % per week</div>
+    <div class="chart-wrap"><canvas id="rateChart"></canvas></div>
+  </div>
+</div>
+
+<h2>🏆 Companies by Candidate Interest</h2>
+<div class="card">
+  <table>
+    <thead><tr><th>#</th><th>Company</th><th>Type</th><th class="center">Candidates</th><th>Who</th><th class="center">Selected?</th></tr></thead>
+    <tbody>{co_rows_html}</tbody>
+  </table>
+</div>
+
+<h2>🎯 Roles by Companies Generated</h2>
+<div class="card">
+  <table>
+    <thead><tr><th>Role</th><th>Candidate</th><th class="center"># Companies</th></tr></thead>
+    <tbody>{role_rows_html}</tbody>
+  </table>
+</div>
+
+<h2>👤 Candidate Detail</h2>
+<div class="cands-grid">{cand_cards}</div>
+
+<p class="updated">Last updated: {today}</p>
+
+<script>
+const coCtx   = document.getElementById('coChart').getContext('2d');
+const rateCtx = document.getElementById('rateChart').getContext('2d');
+const labels  = {w_labels};
+const defaults = {{
+  responsive: true, maintainAspectRatio: false,
+  plugins: {{ legend: {{ display: false }} }},
+  scales: {{
+    x: {{ grid: {{ color: '#21262d' }}, ticks: {{ color: '#8b949e' }} }},
+    y: {{ grid: {{ color: '#21262d' }}, ticks: {{ color: '#8b949e' }} }}
+  }}
+}};
+new Chart(coCtx, {{
+  type: 'bar',
+  data: {{ labels, datasets: [{{
+    data: {w_counts},
+    backgroundColor: 'rgba(88,166,255,.6)',
+    borderColor: '#58a6ff',
+    borderWidth: 1, borderRadius: 4
+  }}] }},
+  options: defaults
+}});
+new Chart(rateCtx, {{
+  type: 'line',
+  data: {{ labels, datasets: [{{
+    data: {w_rates},
+    borderColor: '#3fb950',
+    backgroundColor: 'rgba(63,185,80,.15)',
+    pointBackgroundColor: '#3fb950',
+    tension: .3, fill: true
+  }}] }},
+  options: {{ ...defaults, scales: {{ ...defaults.scales,
+    y: {{ ...defaults.scales.y, min: 0, max: 100,
+         ticks: {{ color: '#8b949e', callback: v => v+'%' }} }}
+  }} }}
+}});
+</script>
+</body>
+</html>"""
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     today = datetime.date.today().strftime("%-d %B %Y")
     print(f"Running leads tracker — {today}")
-
-    company_master = load_company_master()
-    print(f"Loaded {len(company_master)} companies from master")
-
-    projects = find_newsletter_projects(limit=3)
+    master = json.loads(MASTER_PATH.read_text())
+    projects = latest_newsletter_projects(3)
     if not projects:
-        print("No newsletter projects found — exiting")
-        return
-    print(f"Found projects: {[p['name'] for p in projects]}")
-
-    rows = build_report(projects, company_master)
-    print(f"Filtered to {len(rows)} qualifying company entries")
-
+        print("No newsletter projects found"); return
+    print(f"Projects: {[p['name'] for p in projects]}")
+    rows = build_rows(projects, master)
+    print(f"{len(rows)} qualifying entries")
     if not rows:
-        print("No data after filtering — nothing to write")
-        return
-
-    weekly, company_interest, candidate_data = compute_stats(rows)
-    blocks = build_notion_blocks(rows, weekly, company_interest, candidate_data, today)
-
-    print(f"Clearing Notion page {NOTION_PAGE_ID}…")
-    clear_notion_page(NOTION_PAGE_ID)
-
-    print(f"Writing {len(blocks)} blocks…")
-    append_notion_blocks(NOTION_PAGE_ID, blocks)
-
-    update_notion_page_title(NOTION_PAGE_ID, today)
-    print("Done ✅")
-
+        print("Nothing to write"); return
+    html = generate_html(rows, today)
+    OUTPUT_HTML.write_text(html)
+    print(f"Written → {OUTPUT_HTML}")
 
 if __name__ == "__main__":
     main()
