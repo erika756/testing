@@ -34,8 +34,23 @@ def asana(path, params=None):
 def latest_newsletter_projects(n=3):
     ws  = asana("/workspaces")[0]["gid"]
     all_projects = asana("/projects", {"workspace": ws, "limit": 100, "opt_fields": "name,created_at"})
-    pat = re.compile(r"newsletter|news\s*\[leads\]", re.I)
-    hits = [p for p in all_projects if pat.search(p["name"])]
+
+    # Priority 1 — explicitly named leads projects (new format, from W3 onwards)
+    leads_pat = re.compile(r"\[leads\]", re.I)
+    # Priority 2 — old mixed "Newsletter" projects created before the split
+    #              We cap these at 8 weeks ago so future client newsletters are never touched
+    cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(weeks=8)).isoformat()
+    newsletter_pat = re.compile(r"newsletter", re.I)
+
+    hits = []
+    for p in all_projects:
+        name = p.get("name", "")
+        created = p.get("created_at", "")
+        if leads_pat.search(name):
+            hits.append(p)                          # always include explicit leads projects
+        elif newsletter_pat.search(name) and created < cutoff:
+            hits.append(p)                          # only old newsletters (pre-split)
+
     hits.sort(key=lambda p: p.get("created_at", ""), reverse=True)
     return hits[:n]
 
