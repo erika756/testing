@@ -1,0 +1,28 @@
+name: Weekly Leads Tracker
+
+on:
+  schedule:
+    # Every Monday at 07:00 UTC
+    - cron: "0 7 * * 1"
+  workflow_dispatch: # allow manual trigger from GitHub UI
+
+jobs:
+  update-notion:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run tracker
+        env:
+          ASANA_TOKEN: ${{ secrets.ASANA_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE_ID: "3887b561cbb68198a8e4f02a52f531af"
+        run: python scripts/update_leads_tracker.py
