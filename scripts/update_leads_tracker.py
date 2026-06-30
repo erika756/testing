@@ -110,32 +110,29 @@ def build_rows(projects, master):
     return rows
 
 def is_positive(status):
-    s = status.lower()
-    return ("selected" in s and "not" not in s) or "interested" in s or "interviewing" in s or "placed" in s
+    if not status:
+        return False
+    s = status.lower().strip()
+    return "not selected" not in s
 
 def status_icon(status):
-    if not status: return "—"
+    if not status: return "✗ Not Selected"
     s = status.lower()
     if "not selected" in s: return "✗ Not Selected"
-    if "selected" in s:     return "✓ Selected"
     if "placed" in s:       return "★ Placed"
     if "interviewing" in s: return "↻ Interviewing"
+    if "selected" in s:     return "✓ Selected"
     if "lost" in s or "failed" in s: return "✗ Lost"
     if "interested" in s:   return "✓ Interested"
     return status
 
 # ── HTML generation ───────────────────────────────────────────────────────────
 
-def is_rejected(status):
-    s = status.lower()
-    return "not selected" in s or "lost" in s or "failed" in s
-
 def generate_html(rows, today):
     # aggregate
     weekly    = defaultdict(lambda: {"cands": set(), "cos": set(), "pos": 0, "total": 0})
-    co_data   = defaultdict(lambda: {"cands": set(), "selected": False, "etype": ""})
+    co_data   = defaultdict(lambda: {"cands": set(), "selected": False, "etype": "", "sel_count": 0, "total": 0})
     cand_data = defaultdict(lambda: {"role": "", "items": [], "weeks": set()})
-    neglected = defaultdict(lambda: {"rejected": 0, "ever_pos": False, "etype": "", "cands": set(), "weeks": set()})
 
     week_order = []
     for r in rows:
@@ -149,31 +146,26 @@ def generate_html(rows, today):
             weekly[w]["pos"] += 1
         co_data[r["company"]]["cands"].add(r["candidate"])
         co_data[r["company"]]["etype"] = r["etype"]
+        co_data[r["company"]]["total"] += 1
         if is_positive(r["status"]):
             co_data[r["company"]]["selected"] = True
+            co_data[r["company"]]["sel_count"] += 1
         cand_data[r["candidate"]]["role"] = r["role"]
         cand_data[r["candidate"]]["items"].append(r)
         cand_data[r["candidate"]]["weeks"].add(w)
-        if r["status"]:
-            neglected[r["company"]]["etype"] = r["etype"]
-            neglected[r["company"]]["cands"].add(r["candidate"])
-            neglected[r["company"]]["weeks"].add(w)
-            if is_positive(r["status"]):
-                neglected[r["company"]]["ever_pos"] = True
-            if is_rejected(r["status"]):
-                neglected[r["company"]]["rejected"] += 1
+
+    def sel_rate(d):
+        return d["sel_count"] / d["total"] if d["total"] else 0
 
     ranked_cos = sorted(co_data.items(), key=lambda x: -len(x[1]["cands"]))
     ranked_neglected = sorted(
-        [(co, d) for co, d in neglected.items() if d["rejected"] > 0 and not d["ever_pos"]],
-        key=lambda x: -x[1]["rejected"]
-    )
+        co_data.items(),
+        key=lambda x: (sel_rate(x[1]), -x[1]["total"])
+    )[:5]
 
     # chart data
     w_labels  = json.dumps(week_order)
     w_counts  = json.dumps([len(weekly[w]["cos"]) for w in week_order])
-    w_sel     = json.dumps([weekly[w]["pos"] for w in week_order])
-    w_rates   = json.dumps([round(weekly[w]["pos"]/weekly[w]["total"]*100) if weekly[w]["total"] else 0 for w in week_order])
 
     # KPIs
     total_cos   = len(co_data)
@@ -186,11 +178,11 @@ def generate_html(rows, today):
     # neglected companies table
     neglected_rows_html = ""
     for i, (co, d) in enumerate(ranked_neglected, 1):
+        rate = round(sel_rate(d) * 100)
         cands_str = ", ".join(sorted(d["cands"]))
-        weeks_str = " · ".join(sorted(d["weeks"]))
-        neglected_rows_html += f'<tr><td class="rank">{i}</td><td>{co.title()}</td><td><span class="badge">{d["etype"]}</span></td><td class="center notsel">{d["rejected"]}</td><td class="cands-list">{cands_str}</td><td class="cands-list">{weeks_str}</td></tr>\n'
+        neglected_rows_html += f'<tr><td class="rank">{i}</td><td>{co.title()}</td><td><span class="badge">{d["etype"]}</span></td><td class="center notsel">{rate}%</td><td class="center">{d["total"]}</td><td class="cands-list">{cands_str}</td></tr>\n'
     if not neglected_rows_html:
-        neglected_rows_html = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No companies rejected across all candidates yet</td></tr>'
+        neglected_rows_html = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No data yet</td></tr>'
 
     # candidate cards HTML
     cand_cards = ""
@@ -199,7 +191,7 @@ def generate_html(rows, today):
         rows_html = ""
         for r in data["items"]:
             icon = status_icon(r["status"])
-            cls = "sel" if is_positive(r["status"]) else ("notsel" if "not" in r["status"].lower() else "neutral")
+            cls = "sel" if is_positive(r["status"]) else "notsel"
             rows_html += f"""<tr>
               <td>{r['company'].title()}</td>
               <td><span class="badge">{r['etype']}</span></td>
@@ -363,24 +355,20 @@ def generate_html(rows, today):
     <div class="kpi-sub">{all_pos} of {len(rows)} entries selected</div>
   </div>
   <div class="kpi">
-    <div class="kpi-label">Most Wanted Company</div>
+    <div class="kpi-label">Highest Interest Company</div>
     <div class="kpi-value yellow" style="font-size:18px;margin-top:4px">{top_co}</div>
     <div class="kpi-sub">{top_co_n} candidates interested</div>
   </div>
 </div>
 
-<div class="charts-grid">
+<div class="charts-grid" style="grid-template-columns:1fr">
   <div class="chart-card">
-    <div class="chart-title">Companies shown per week</div>
+    <div class="chart-title">Number of unique companies interested</div>
     <div class="chart-wrap"><canvas id="coChart"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-title">Selection rate % per week</div>
-    <div class="chart-wrap"><canvas id="rateChart"></canvas></div>
   </div>
 </div>
 
-<h2>🏆 Companies by Candidate Interest</h2>
+<h2>The Most Interest Shown (Rankings)</h2>
 <div class="card">
   <table>
     <thead><tr><th>#</th><th>Company</th><th>Type</th><th class="center">Candidates</th><th>Who</th><th class="center">Selected?</th></tr></thead>
@@ -388,13 +376,13 @@ def generate_html(rows, today):
   </table>
 </div>
 
-<h2>🚫 Most Neglected Companies (never selected)</h2>
+<h2>🚫 Most Neglected Companies</h2>
 <div class="card"><table>
-  <thead><tr><th>#</th><th>Company</th><th>Type</th><th class="center">Times Rejected</th><th>Shown to</th><th>Week(s)</th></tr></thead>
+  <thead><tr><th>#</th><th>Company</th><th>Type</th><th class="center">Selection Rate</th><th class="center">Times Shown</th><th>Shown to</th></tr></thead>
   <tbody>{neglected_rows_html}</tbody>
 </table></div>
 
-<h2>🎯 Roles by Companies Generated</h2>
+<h2>Roles that generate the most interest</h2>
 <div class="card">
   <table>
     <thead><tr><th>Role</th><th>Candidate</th><th class="center"># Companies</th></tr></thead>
@@ -402,16 +390,14 @@ def generate_html(rows, today):
   </table>
 </div>
 
-<h2>👤 Candidate Detail</h2>
+<h2>Candidates Presented</h2>
 <div class="cands-grid">{cand_cards}</div>
 
 <p class="updated">Last updated: {today}</p>
 
 <script>
-const coCtx   = document.getElementById('coChart').getContext('2d');
-const rateCtx = document.getElementById('rateChart').getContext('2d');
-const labels  = {w_labels};
-const defaults = {{
+const labels = {w_labels};
+const cfg = {{
   responsive: true, maintainAspectRatio: false,
   plugins: {{ legend: {{ display: false }} }},
   scales: {{
@@ -419,7 +405,7 @@ const defaults = {{
     y: {{ grid: {{ color: '#21262d' }}, ticks: {{ color: '#8b949e' }} }}
   }}
 }};
-new Chart(coCtx, {{
+new Chart(document.getElementById('coChart').getContext('2d'), {{
   type: 'bar',
   data: {{ labels, datasets: [{{
     data: {w_counts},
@@ -427,21 +413,7 @@ new Chart(coCtx, {{
     borderColor: '#58a6ff',
     borderWidth: 1, borderRadius: 4
   }}] }},
-  options: defaults
-}});
-new Chart(rateCtx, {{
-  type: 'line',
-  data: {{ labels, datasets: [{{
-    data: {w_rates},
-    borderColor: '#3fb950',
-    backgroundColor: 'rgba(63,185,80,.15)',
-    pointBackgroundColor: '#3fb950',
-    tension: .3, fill: true
-  }}] }},
-  options: {{ ...defaults, scales: {{ ...defaults.scales,
-    y: {{ ...defaults.scales.y, min: 0, max: 100,
-         ticks: {{ color: '#8b949e', callback: v => v+'%' }} }}
-  }} }}
+  options: cfg
 }});
 </script>
 </body>

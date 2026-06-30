@@ -51,15 +51,14 @@
   <div class="kpi"><div class="kpi-label">Unique Companies</div><div class="kpi-value accent">14</div><div class="kpi-sub">across all weeks</div></div>
   <div class="kpi"><div class="kpi-label">Candidates</div><div class="kpi-value accent">9</div><div class="kpi-sub">active this period</div></div>
   <div class="kpi"><div class="kpi-label">Selection Rate</div><div class="kpi-value green">43%</div><div class="kpi-sub">15 of 35 entries positive</div></div>
-  <div class="kpi"><div class="kpi-label">Most Wanted</div><div class="kpi-value yellow">Le Jardin Switzerland</div><div class="kpi-sub">5 candidates interested</div></div>
+  <div class="kpi"><div class="kpi-label">Highest Interest Company</div><div class="kpi-value yellow">Le Jardin Switzerland</div><div class="kpi-sub">5 candidates interested</div></div>
 </div>
 
-<div class="charts-grid">
-  <div class="chart-card"><div class="chart-title">Companies shown per week</div><div class="chart-wrap"><canvas id="coChart"></canvas></div></div>
-  <div class="chart-card"><div class="chart-title">Selection rate % per week</div><div class="chart-wrap"><canvas id="rateChart"></canvas></div></div>
+<div class="charts-grid" style="grid-template-columns:1fr">
+  <div class="chart-card"><div class="chart-title">Number of unique companies interested</div><div class="chart-wrap"><canvas id="coChart"></canvas></div></div>
 </div>
 
-<h2>🏆 Companies by Candidate Interest</h2>
+<h2>The Most Interest Shown (Rankings)</h2>
 <div class="card"><table>
   <thead><tr><th>#</th><th>Company</th><th>Type</th><th class="center">Candidates</th><th>Who</th><th class="center">Selected?</th></tr></thead>
   <tbody><tr><td class="rank">1</td><td>Le Jardin Switzerland</td><td><span class="badge">Lead Type A</span></td><td class="center">5</td><td class="cands-list">Bermet, Fayez, Ginny, Matt, Ryan</td><td class="sel center">✓ Yes</td></tr>
@@ -79,14 +78,19 @@
 </tbody>
 </table></div>
 
-<h2>🚫 Most Neglected Companies (never selected)</h2>
+<h2>🚫 Most Neglected Companies</h2>
 <div class="card"><table>
-  <thead><tr><th>#</th><th>Company</th><th>Type</th><th class="center">Times Rejected</th><th>Shown to</th><th>Week(s)</th></tr></thead>
-  <tbody><tr><td class="rank">1</td><td>Naturida.De</td><td><span class="badge">Lead Type A</span></td><td class="center notsel">3</td><td class="cands-list">Elad, Indrė, Renata</td><td class="cands-list">8 Jun 2026</td></tr>
+  <thead><tr><th>#</th><th>Company</th><th>Type</th><th class="center">Selection Rate</th><th class="center">Times Shown</th><th>Shown to</th></tr></thead>
+  <tbody>
+<tr><td class="rank">1</td><td>Naturida.De</td><td><span class="badge">Lead Type A</span></td><td class="center notsel">0%</td><td class="center">3</td><td class="cands-list">Elad, Indrė, Renata</td></tr>
+<tr><td class="rank">2</td><td>Basak &amp; Lather</td><td><span class="badge">Lead Type A</span></td><td class="center notsel">0%</td><td class="center">1</td><td class="cands-list">Fayez</td></tr>
+<tr><td class="rank">3</td><td>Eat Surreal</td><td><span class="badge">Lead Type A</span></td><td class="center notsel">0%</td><td class="center">1</td><td class="cands-list">Fayez</td></tr>
+<tr><td class="rank">4</td><td>Purge Media</td><td><span class="badge">Lead Type A</span></td><td class="center notsel">0%</td><td class="center">1</td><td class="cands-list">Bermet</td></tr>
+<tr><td class="rank">5</td><td>Vibit</td><td><span class="badge">Lead Type A</span></td><td class="center notsel">0%</td><td class="center">1</td><td class="cands-list">Fayez</td></tr>
 </tbody>
 </table></div>
 
-<h2>🎯 Roles by Companies Generated</h2>
+<h2>Roles that generate the most interest</h2>
 <div class="card"><table>
   <thead><tr><th>Role</th><th>Candidate</th><th class="center"># Companies</th></tr></thead>
   <tbody><tr><td>CRO Lead</td><td>Fayez</td><td class="center">9</td></tr>
@@ -101,7 +105,7 @@
 </tbody>
 </table></div>
 
-<h2>👤 Candidate Detail</h2>
+<h2>Candidates Presented</h2>
 <div class="cands-grid">
     <div class="card cand-card">
       <div class="cand-header">
@@ -123,15 +127,15 @@
       </div>
       <table class="inner-table">
         <thead><tr><th>Company</th><th>Type</th><th>Status</th></tr></thead>
-        <tbody><tr><td>Le Jardin Switzerland</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
-<tr><td>Ad Crunch Digital</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
-<tr><td>The Pixel Theory</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
-<tr><td>Colitt</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
-<tr><td>Qure</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
-<tr><td>Eat Surreal</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
-<tr><td>Viorita</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
-<tr><td>Vibit</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
-<tr><td>Basak & Lather</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
+        <tbody><tr><td>Le Jardin Switzerland</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
+<tr><td>Ad Crunch Digital</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
+<tr><td>The Pixel Theory</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
+<tr><td>Colitt</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
+<tr><td>Qure</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
+<tr><td>Eat Surreal</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
+<tr><td>Viorita</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
+<tr><td>Vibit</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
+<tr><td>Basak & Lather</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
 </tbody>
       </table>
     </div>
@@ -143,9 +147,9 @@
       <table class="inner-table">
         <thead><tr><th>Company</th><th>Type</th><th>Status</th></tr></thead>
         <tbody><tr><td>Onset</td><td><span class="badge">Lead Type A</span></td><td class="sel">↻ Interviewing</td></tr>
-<tr><td>Aeon Athletics</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
-<tr><td>Le Jardin Switzerland</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
-<tr><td>Purge Media</td><td><span class="badge">Lead Type A</span></td><td class="neutral">—</td></tr>
+<tr><td>Aeon Athletics</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
+<tr><td>Le Jardin Switzerland</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
+<tr><td>Purge Media</td><td><span class="badge">Lead Type A</span></td><td class="notsel">✗ Not Selected</td></tr>
 </tbody>
       </table>
     </div>
@@ -235,6 +239,5 @@
 const labels=["25 May 2026", "8 Jun 2026", "15 Jun 2026"];
 const cfg={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}},y:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}}}};
 new Chart(document.getElementById('coChart'),{type:'bar',data:{labels,datasets:[{data:[12, 5, 4],backgroundColor:'rgba(88,166,255,.55)',borderColor:'#58a6ff',borderWidth:1,borderRadius:5}]},options:cfg});
-new Chart(document.getElementById('rateChart'),{type:'line',data:{labels,datasets:[{data:[25, 33, 100],borderColor:'#3fb950',backgroundColor:'rgba(63,185,80,.12)',pointBackgroundColor:'#3fb950',tension:.3,fill:true}]},options:{...cfg,scales:{...cfg.scales,y:{...cfg.scales.y,min:0,max:100,ticks:{color:'#8b949e',callback:v=>v+'%'}}}}});
 </script>
 </body></html>
