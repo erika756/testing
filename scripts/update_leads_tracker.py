@@ -117,14 +117,8 @@ def is_positive(status):
 
 def status_icon(status):
     if not status: return "✗ Not Selected"
-    s = status.lower()
-    if "not selected" in s: return "✗ Not Selected"
-    if "placed" in s:       return "★ Placed"
-    if "interviewing" in s: return "↻ Interviewing"
-    if "selected" in s:     return "✓ Selected"
-    if "lost" in s or "failed" in s: return "✗ Lost"
-    if "interested" in s:   return "✓ Interested"
-    return status
+    if "not selected" in status.lower(): return "✗ Not Selected"
+    return "✓ Selected"
 
 # ── HTML generation ───────────────────────────────────────────────────────────
 
