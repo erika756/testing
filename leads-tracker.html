@@ -48,17 +48,17 @@
 <p class="subtitle">Non-client companies only &nbsp;·&nbsp; auto-refreshed every Monday</p>
 
 <div class="kpi-grid">
-  <div class="kpi"><div class="kpi-label">Unique Companies</div><div class="kpi-value accent">15</div><div class="kpi-sub">across all weeks</div></div>
+  <div class="kpi"><div class="kpi-label">Unique Companies Interested</div><div class="kpi-value accent">15</div><div class="kpi-sub">across all weeks</div></div>
   <div class="kpi"><div class="kpi-label">Candidates</div><div class="kpi-value accent">9</div><div class="kpi-sub">active this period</div></div>
   <div class="kpi"><div class="kpi-label">Selection Rate</div><div class="kpi-value green">42%</div><div class="kpi-sub">15 of 36 entries positive</div></div>
-  <div class="kpi"><div class="kpi-label">Highest Interest Company</div><div class="kpi-value yellow">Le Jardin Switzerland</div><div class="kpi-sub">5 candidates interested</div></div>
+  <div class="kpi"><div class="kpi-label">Highest Interest Company</div><div class="kpi-value yellow">Le Jardin Switzerland</div><div class="kpi-sub">Interested in 5 candidates</div></div>
 </div>
 
 <div class="charts-grid" style="grid-template-columns:1fr">
-  <div class="chart-card"><div class="chart-title">Number of unique companies interested</div><div class="chart-wrap"><canvas id="coChart"></canvas></div></div>
+  <div class="chart-card"><div class="chart-title">Number of unique companies interested per week</div><div class="chart-wrap"><canvas id="coChart"></canvas></div></div>
 </div>
 
-<h2>The Most Interest Shown (Rankings)</h2>
+<h2>The Most Interest Shown — companies that showed the most interest over time (rankings)</h2>
 <div class="card"><table>
   <thead><tr><th>#</th><th>Company</th><th>Type</th><th class="center">Candidates</th><th>Who</th><th class="center">Selected?</th></tr></thead>
   <tbody><tr><td class="rank">1</td><td>Le Jardin Switzerland</td><td><span class="badge">Lead Type A</span></td><td class="center">5</td><td class="cands-list">Bermet, Fayez, Ginny, Matt, Ryan</td><td class="sel center">✓ Yes</td></tr>
@@ -238,7 +238,7 @@
 <p class="updated">Last updated: 23 June 2026</p>
 
 <script>
-const labels=["25 May 2026", "8 Jun 2026", "15 Jun 2026"];
+const labels=["W1", "W2", "W3"];
 const cfg={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}},y:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}}}};
 new Chart(document.getElementById('coChart'),{type:'bar',data:{labels,datasets:[{data:[12, 6, 4],backgroundColor:'rgba(88,166,255,.55)',borderColor:'#58a6ff',borderWidth:1,borderRadius:5}]},options:cfg});
 </script>

@@ -158,7 +158,8 @@ def generate_html(rows, today):
     )[:5]
 
     # chart data
-    w_labels  = json.dumps(week_order)
+    w_short   = [f"W{i+1}" for i in range(len(week_order))]
+    w_labels  = json.dumps(w_short)
     w_counts  = json.dumps([len(weekly[w]["cos"]) for w in week_order])
 
     # KPIs
@@ -334,7 +335,7 @@ def generate_html(rows, today):
 
 <div class="kpi-grid">
   <div class="kpi">
-    <div class="kpi-label">Unique Companies</div>
+    <div class="kpi-label">Unique Companies Interested</div>
     <div class="kpi-value accent">{total_cos}</div>
     <div class="kpi-sub">across all weeks</div>
   </div>
@@ -351,18 +352,18 @@ def generate_html(rows, today):
   <div class="kpi">
     <div class="kpi-label">Highest Interest Company</div>
     <div class="kpi-value yellow" style="font-size:18px;margin-top:4px">{top_co}</div>
-    <div class="kpi-sub">{top_co_n} candidates interested</div>
+    <div class="kpi-sub">Interested in {top_co_n} candidates</div>
   </div>
 </div>
 
 <div class="charts-grid" style="grid-template-columns:1fr">
   <div class="chart-card">
-    <div class="chart-title">Number of unique companies interested</div>
+    <div class="chart-title">Number of unique companies interested per week</div>
     <div class="chart-wrap"><canvas id="coChart"></canvas></div>
   </div>
 </div>
 
-<h2>The Most Interest Shown (Rankings)</h2>
+<h2>The Most Interest Shown — companies that showed the most interest over time (rankings)</h2>
 <div class="card">
   <table>
     <thead><tr><th>#</th><th>Company</th><th>Type</th><th class="center">Candidates</th><th>Who</th><th class="center">Selected?</th></tr></thead>
